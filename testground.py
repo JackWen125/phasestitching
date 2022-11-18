@@ -11,6 +11,14 @@ if __name__ == '__main__':
     dir_name = 'E:/phase images/'
     save_loc = "E:/stitched images"
     save_name = "testFullRes"
+    dimension = [4, 4]
+    for picture_index in range(16):
+        if picture_index < dimension[0]:  # if on first row
+            print(str(picture_index) + " first row")
+        elif picture_index % dimension[0] == 0:  # if on first column of each row
+            print(str(picture_index) + " first of each column")
+        else:  # if on >1 column on >1 row
+            print(str(picture_index) + " on >1 column on >1 row")
 
 
 def get_image_dirs(path_to_file):

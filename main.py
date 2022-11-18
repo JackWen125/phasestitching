@@ -88,6 +88,8 @@ def stitch(dir, dimension, overlap):
     dir is the folder with the images
     """
 
+    time = []
+
     # get list of all images in dir. Read the first image and store the dimension
     images_dir = get_image_dirs(dir)
     img = simplifier(cv2.imread(images_dir[0], 0), "I1")
@@ -123,6 +125,8 @@ def stitch(dir, dimension, overlap):
             stitched = paste(stitched, img, [0, 0], first_image_offset)
             mask = paste(mask, empty_image, [0, 0], first_image_offset)
             offset_list = [[0, 0]]
+            time.append(0)
+            time.append(0)
             continue
 
         img = simplifier(cv2.imread(images_dir[picture_index], 0), "I1")
@@ -145,38 +149,60 @@ def stitch(dir, dimension, overlap):
             img1ROI = getROI(images[picture_index - dimension[1]], "bottom", overlap)
             img2ROI = getROI(images[picture_index], "top", overlap)"""
 
-        img_resized = cv2.resize(img, (int(img.shape[1] / 2), int(img.shape[0] / 2)),
+        """img_resized = cv2.resize(img, (int(img.shape[1] / 2), int(img.shape[0] / 2)),
                              interpolation=cv2.INTER_AREA)
         ROI_resized = cv2.resize(ROI, (int(ROI.shape[1] / 2), int(ROI.shape[0] / 2)),
                              interpolation=cv2.INTER_AREA)
 
         cv2.imshow("img", img_resized)
         cv2.imshow("ROI", ROI_resized)
-        cv2.waitKey(0)
+        cv2.waitKey(0)"""
 
         warp_matrix = np.eye(2, 3, dtype=np.float32)
         # Run the ECC algorithm. The results are stored in warp_matrix.
+        time.append(process_time_ns())
         (cc, warp_matrix) = cv2.findTransformECC(ROI, img, warp_matrix, warp_mode, criteria)
+        time.append(process_time_ns())
+        print("picture " + str(picture_index) + ": " + str((time[2 * picture_index + 1] - time[2 * picture_index]) / pow(10, 9)) + " seconds")
         # adjust for the image -> roi image
         warp_matrix[0][2] *= -1
         warp_matrix[1][2] *= -1
         if picture_index < dimension[0]:  # if on first row
+            print(str(picture_index) + " first row")
             warp_matrix[0][2] += image_shape[1] - int(ROI.shape[1])
+            # paste current image on to stitched image
+            stitched = paste(stitched, img, [warp_matrix[1][2] + offset_list[picture_index - 1][1],
+                                             warp_matrix[0][2] + offset_list[picture_index - 1][0]], first_image_offset)
+            mask = paste(mask, empty_image, [warp_matrix[1][2] + offset_list[picture_index - 1][1],
+                                             warp_matrix[0][2] + offset_list[picture_index - 1][0]], first_image_offset)
+            # update the last_pos
+            offset_list.append([round(warp_matrix[0][2] + offset_list[picture_index - 1][0]),
+                                round(warp_matrix[1][2] + offset_list[picture_index - 1][1])])
         elif picture_index % dimension[0] == 0:  # if on first column of each row
+            print(str(picture_index) + " first of each column")
             warp_matrix[1][2] += image_shape[0] - int(ROI.shape[0])
+            # paste current image on to stitched image
+            stitched = paste(stitched, img, [warp_matrix[1][2] + offset_list[picture_index - dimension[0]][1],
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+            mask = paste(mask, empty_image, [warp_matrix[1][2] + offset_list[picture_index - dimension[0]][1],
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+            # update the last_pos
+            offset_list.append([round(warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]),
+                                round(warp_matrix[1][2] + offset_list[picture_index - 1][1])])
         else:  # if on >1 column on >1 row
+            print(str(picture_index) + " on >1 column on >1 row")
             warp_matrix[0][2] += image_shape[1] - int(ROI.shape[1])
+            # paste current image on to stitched image
+            stitched = paste(stitched, img, [warp_matrix[1][2] + offset_list[picture_index - 1][1],
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+            mask = paste(mask, empty_image, [warp_matrix[1][2] + offset_list[picture_index - 1][1],
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+            # update the last_pos
+            offset_list.append([round(warp_matrix[0][2] + offset_list[picture_index - 1][0] + config_offset_list[picture_index][0]),
+                                round(warp_matrix[1][2] + offset_list[picture_index - 1][1])])
 
         print(warp_matrix)
 
-        # paste current image on to stitched image
-        # stitched[int(warp_matrix[1][2]):int(warp_matrix[1][2]) + image_shape[0],
-        # int(warp_matrix[0][2]):int(warp_matrix[0][2]) + image_shape[1]] = images[picture_index]
-        stitched = paste(stitched, img, [warp_matrix[1][2] + offset_list[picture_index - 1][1], warp_matrix[0][2] + offset_list[picture_index - 1][0]], first_image_offset)
-        mask = paste(mask, empty_image, [warp_matrix[1][2] + offset_list[picture_index - 1][1], warp_matrix[0][2] + offset_list[picture_index - 1][0]], first_image_offset)
-
-        # update the last_pos
-        offset_list.append([round(warp_matrix[0][2]), round(warp_matrix[1][2])])
         print("offsetList", end=": ")
         print(offset_list)
 
@@ -245,7 +271,7 @@ if __name__ == '__main__':
     cv2.waitKey(0)"""
     imageDir = 'E:/phase images/'
     stitchedImage = stitch(imageDir, (4, 4), 0.38)
-    stitchedImage = cv2.resize(stitchedImage, (int(stitchedImage.shape[1] / 2), int(stitchedImage.shape[0] / 2)),
+    stitchedImage = cv2.resize(stitchedImage, (int(stitchedImage.shape[1] / 8), int(stitchedImage.shape[0] / 8)),
                                interpolation=cv2.INTER_AREA)
     cv2.imshow("Aligned Image 2", stitchedImage)
     cv2.waitKey(0)
