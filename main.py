@@ -129,11 +129,16 @@ def stitch(dir, dimension, overlap):
             time.append(0)
             continue
 
+        # this is to get the roi based on the mask.
+        # the stitched canvas (stitch_image_mask) is copied then a blank image with the same dimensions as the image to
+        #  be pasted is pasted on to the stitch_image_mask based on the config_offset_list
         img = simplifier(cv2.imread(images_dir[picture_index], 0), "I1")
         stitch_image_mask = np.zeros(stitched.shape[:2], dtype="uint8")
+        # paste based on change from last indexed coordinate
         stitch_image_mask = paste(stitch_image_mask, empty_image,
-                                [config_offset_list[picture_index][1], config_offset_list[picture_index][0]],
-                                first_image_offset)
+                                  [(config_offset_list[picture_index][1] - config_offset_list[picture_index - 1][1]) + offset_list[picture_index - 1][1],
+                                   (config_offset_list[picture_index][0] - config_offset_list[picture_index - 1][0]) + offset_list[picture_index - 1][0]],
+                                  first_image_offset)
         overlapped_mask = cv2.bitwise_and(mask, stitch_image_mask)
 
         ROI = autocrop(cv2.bitwise_and(stitched, stitched, mask=overlapped_mask))
@@ -163,7 +168,8 @@ def stitch(dir, dimension, overlap):
         time.append(process_time_ns())
         (cc, warp_matrix) = cv2.findTransformECC(ROI, img, warp_matrix, warp_mode, criteria)
         time.append(process_time_ns())
-        print("picture " + str(picture_index) + ": " + str((time[2 * picture_index + 1] - time[2 * picture_index]) / pow(10, 9)) + " seconds")
+        print("picture " + str(picture_index) + ": " + str(
+            (time[2 * picture_index + 1] - time[2 * picture_index]) / pow(10, 9)) + " seconds")
         # adjust for the image -> roi image
         warp_matrix[0][2] *= -1
         warp_matrix[1][2] *= -1
@@ -183,9 +189,11 @@ def stitch(dir, dimension, overlap):
             warp_matrix[1][2] += image_shape[0] - int(ROI.shape[0])
             # paste current image on to stitched image
             stitched = paste(stitched, img, [warp_matrix[1][2] + offset_list[picture_index - dimension[0]][1],
-                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]],
+                             first_image_offset)
             mask = paste(mask, empty_image, [warp_matrix[1][2] + offset_list[picture_index - dimension[0]][1],
-                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]],
+                         first_image_offset)
             # update the last_pos
             offset_list.append([round(warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]),
                                 round(warp_matrix[1][2] + offset_list[picture_index - 1][1])])
@@ -194,19 +202,26 @@ def stitch(dir, dimension, overlap):
             warp_matrix[0][2] += image_shape[1] - int(ROI.shape[1])
             # paste current image on to stitched image
             stitched = paste(stitched, img, [warp_matrix[1][2] + offset_list[picture_index - 1][1],
-                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]],
+                             first_image_offset)
             mask = paste(mask, empty_image, [warp_matrix[1][2] + offset_list[picture_index - 1][1],
-                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]], first_image_offset)
+                                             warp_matrix[0][2] + offset_list[picture_index - dimension[0]][0]],
+                         first_image_offset)
             # update the last_pos
-            offset_list.append([round(warp_matrix[0][2] + offset_list[picture_index - 1][0] + config_offset_list[picture_index][0]),
-                                round(warp_matrix[1][2] + offset_list[picture_index - 1][1])])
+            offset_list.append(
+                [round(warp_matrix[0][2] + offset_list[picture_index - 1][0] + config_offset_list[picture_index][0]),
+                 round(warp_matrix[1][2] + offset_list[picture_index - 1][1])])
 
         print(warp_matrix)
 
         print("offsetList", end=": ")
         print(offset_list)
 
-        stitchedReized = cv2.resize(stitched, (int(stitched.shape[1] / 4), int(stitched.shape[0] / 4)),
+        print("ConfigList", end=": ")
+        print(config_offset_list)
+
+        stitchedcopy = cv2.addWeighted(stitched, 0.5, overlapped_mask, 0.5, 0.0)
+        stitchedReized = cv2.resize(stitchedcopy, (int(stitched.shape[1] / 4), int(stitched.shape[0] / 4)),
                                     interpolation=cv2.INTER_AREA)
         cv2.imshow("Aligned Image 2", stitchedReized)
         cv2.waitKey(0)
@@ -215,60 +230,6 @@ def stitch(dir, dimension, overlap):
 
 
 if __name__ == '__main__':
-    """images = get_image_dirs('C:/Users/jackc/Desktop/test image sample')
-
-    img0 = simplifier(cv2.imread(images[0], 0), "I1")
-    img1 = simplifier(cv2.imread(images[1], 0), "I1")
-
-    overlap = 0.35
-
-    t1_start = process_time_ns()
-
-    img0ROI = img0[0:img0.shape[0], img0.shape[1] - int(img0.shape[1] * overlap):img0.shape[1]]
-    img1ROI = img1[0:img1.shape[0], 0:int(img1.shape[1] * overlap)]
-
-    print(img0ROI.shape)
-    print(img1ROI.shape)
-
-    stitched_dimension = (1100, 3000)
-    im2_aligned = np.zeros(shape=[stitched_dimension[0], stitched_dimension[1]], dtype=np.uint8)
-
-    sz = img0.shape
-
-    warp_mode = cv2.MOTION_TRANSLATION
-    warp_matrix = np.eye(2, 3, dtype=np.float32)
-    number_of_iterations = 5000;
-    termination_eps = 1e-10;
-    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
-
-    # Run the ECC algorithm. The results are stored in warp_matrix.
-    (cc, warp_matrix) = cv2.findTransformECC(img0ROI, img1ROI, warp_matrix, warp_mode, criteria)
-    # adjust for the image -> roi image
-    warp_matrix[0][2] *= -1
-    warp_matrix[0][2] += img1.shape[1] - int(img1.shape[1] * overlap)
-    warp_matrix[1][2] *= -1
-    print(warp_matrix)
-
-    t1_stop = process_time_ns()
-    print("Elapsed time during the whole program in seconds:",
-          (t1_stop - t1_start) / pow(10, 9))
-
-    # Use warpAffine for Translation, Euclidean and Affine
-    im2_aligned[0:img0.shape[0], 0:img0.shape[1]] = img0
-    im2_aligned[int(warp_matrix[1][2]):int(warp_matrix[1][2]) + img1.shape[0],
-    int(warp_matrix[0][2]):int(warp_matrix[0][2]) + img1.shape[1]] = img1
-    # im2_aligned = cv2.warpAffine(img0, warp_matrix, (sz[1], sz[0]), flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
-    # Show final results
-    img0 = cv2.resize(img0, (int(img0.shape[1] / 2), int(img0.shape[0] / 2)),
-                      interpolation=cv2.INTER_AREA)
-    img1 = cv2.resize(img1, (int(img1.shape[1] / 2), int(img1.shape[0] / 2)),
-                      interpolation=cv2.INTER_AREA)
-    im2_aligned = cv2.resize(im2_aligned, (int(im2_aligned.shape[1] / 2), int(im2_aligned.shape[0] / 2)),
-                             interpolation=cv2.INTER_AREA)
-    # cv2.imshow("Image 1", img0)
-    # cv2.imshow("Image 2", img1)
-    cv2.imshow("Aligned Image 2", im2_aligned)
-    cv2.waitKey(0)"""
     imageDir = 'E:/phase images/'
     stitchedImage = stitch(imageDir, (4, 4), 0.38)
     stitchedImage = cv2.resize(stitchedImage, (int(stitchedImage.shape[1] / 8), int(stitchedImage.shape[0] / 8)),
