@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 from time import process_time_ns
-from testground import get_image_dirs, get_images_opencv
+from testground import get_image_dirs, stitch_tile
 from time import process_time_ns
 
 
@@ -258,11 +258,11 @@ def stitch(dir, dimension, overlap):
 
 
 if __name__ == '__main__':
-    """imageDir = 'E:/phase images 3/'
-    stitchedImage = stitch(imageDir, (7, 6), 0.38)"""
-    imageDir = 'E:/phase images 3/'
-    stitchedImage = stitch(imageDir, (7, 6), 0.38)
+    imageDir = 'E:/phase images 2/'
+    stitchedImage = stitch(imageDir, (4, 4), 0.38)
     stitchedImage = cv2.resize(stitchedImage, (int(stitchedImage.shape[1] / 8), int(stitchedImage.shape[0] / 8)),
                                interpolation=cv2.INTER_AREA)
     cv2.imshow("Aligned Image 2", stitchedImage)
     cv2.waitKey(0)
+    """img = stitch_tile('E:/phase images/', 4, 4)
+    img.show()"""
